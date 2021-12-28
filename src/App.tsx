@@ -1,20 +1,51 @@
-/* eslint-disable no-param-reassign */
 /* eslint-disable react/no-array-index-key */
-import { useState, useRef, useEffect } from 'react';
-import Button from './components/Button/Button';
-import 'react-toastify/dist/ReactToastify.css';
-import './App.scss';
+/* eslint-disable jsx-a11y/label-has-associated-control */
+import React, { useState, useRef, useEffect } from 'react';
+import ProgressBar from '@ramonak/react-progress-bar';
 
-type Task = {
-  name: string;
+import './App.scss';
+import TaskComponent from './components/Task/TaskComponent';
+
+export type Task = {
+  description: string;
   completed: boolean;
+  tag: string;
+  edit: boolean;
+  imgSrc: string | ArrayBuffer | null;
 };
 
-const App = () => {
-  const [inputValue, setInputValue] = useState('');
+const tags = ['today', 'this week', 'this month', 'all'];
 
+const App = () => {
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const saved = localStorage.getItem('toDoList') || '';
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return [];
+  });
+  const [inputValue, setInputValue] = useState('');
+  const [activeTag, setActiveTag] = useState<string>('all');
   const [showCompleted, setShowCompleted] = useState(false);
-  const [toDoList, setToDoList] = useState<Task[]>([]);
+  const [progressBar, setProgressBar] = useState(0);
+  const [errorMsg, setErrorMsg] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('toDoList', JSON.stringify(tasks));
+  }, [tasks]);
+
+  useEffect(() => {
+    const doneTasks = [...tasks].filter((item) => item.completed).length;
+
+    const progressBarCalculator = () => {
+      if (!tasks.length) {
+        return 0;
+      }
+      return Math.trunc((100 / tasks.length) * doneTasks);
+    };
+    setProgressBar(progressBarCalculator);
+  }, [tasks]);
+
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -22,37 +53,43 @@ const App = () => {
   }, []);
 
   const addNewTask = () => {
-    if (inputValue) {
-      setToDoList([...toDoList, { name: inputValue, completed: false }]);
+    const inputValid = tasks.find((task) => task.description === inputValue);
+    if (inputValid === undefined && inputValue.trim()) {
+      setErrorMsg(false);
+      setTasks([
+        ...tasks,
+        {
+          description: inputValue,
+          completed: false,
+          tag: tags[0],
+          edit: false,
+          imgSrc: null,
+        },
+      ]);
       setInputValue('');
-    }
-  };
-
-  const taskToShow = toDoList.filter((task) => {
-    if (showCompleted) {
-      return task.completed;
-    }
-    return true;
-  });
-
-  const clearAll = () => {
-    setToDoList([]);
-  };
-
-  const taskDone = (index: number) => {
-    const cloneToDoList = [...toDoList];
-    if (cloneToDoList[index].completed === true) {
-      cloneToDoList[index].completed = false;
     } else {
-      cloneToDoList[index].completed = true;
+      setErrorMsg(true);
     }
-
-    setToDoList(cloneToDoList);
   };
 
   const deleteTask = (index: number) => {
-    const newArr = toDoList.filter((task, i) => i !== index);
-    setToDoList(newArr);
+    setTasks(tasks.filter((task, i) => i !== index));
+  };
+
+  const updateTask = (updatedTask: Task, description: string) => {
+    const newTasks = [...tasks].map((task) => {
+      if (task.description === description) {
+        return updatedTask;
+      }
+      return task;
+    });
+    setTasks(newTasks);
+  };
+
+  const clearAll = () => {
+    setTasks([]);
+    setInputValue('');
+    setErrorMsg(false);
   };
 
   const buttons = [
@@ -72,52 +109,81 @@ const App = () => {
 
   return (
     <div className="container">
-      <div className="wrapper">
-        <input
-          className="input"
-          type="text"
-          ref={input}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-        />
-        {buttons.map(({ buttonName, onClick }) => (
-          <Button key={buttonName} onClick={onClick}>
-            {buttonName}
-          </Button>
-        ))}
-
-      </div>
-      <label htmlFor="done">
-        <input type="checkbox" id="done" onChange={() => setShowCompleted(!showCompleted)} />
-        {showCompleted ? ' Completed tasks' : 'All tasks' }
-      </label>
-
-      <div className="list__wrapper">
-        {taskToShow.map((task, index) => (
-          <div
-            key={index}
-            className={task.completed ? 'task__item done' : 'task__item'}
-            style={{ background: '#DEB887' }}
-          >
-            {task.name}
-            <div className="button__wrapper">
+      <div className="todo">
+        <span className={errorMsg ? 'error__message active' : 'error__message'}>
+          Empty field or duplicated task
+        </span>
+        <div className="wrapper">
+          <input
+            className={errorMsg ? 'input error' : 'input'}
+            type="text"
+            ref={input}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+          />
+          <div className="main__buttons">
+            {buttons.map((button) => (
               <button
-                className="button button--completed"
-                onClick={() => taskDone(index)}
+                className="button"
+                key={button.buttonName}
+                onClick={button.onClick}
               >
-                {task.completed === false ? 'done' : 'undone'}
+                {button.buttonName}
               </button>
-              <button
-                key={index}
-                className="button button--remove"
-                onClick={() => deleteTask(index)}
-              >
-                X
-              </button>
-            </div>
-
+            ))}
           </div>
-        ))}
+        </div>
+
+        <div className="bar">
+          <div className="checkbox">
+            <input
+              id="done"
+              className="checkbox__input"
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => {
+                e.stopPropagation();
+                setShowCompleted((e.target as HTMLInputElement).checked);
+              }}
+            />
+            <label className="checkbox__label" htmlFor="done">
+              Completed tasks
+            </label>
+          </div>
+
+          <div className="tags__buttons">
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                className="button button--tags"
+                onClick={() => setActiveTag(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+        <h1 className="progress__title">Progress bar</h1>
+        <ProgressBar
+          completed={progressBar}
+          bgColor="#bd5a96"
+          baseBgColor="#6b5862"
+          labelColor="#ffffff"
+        />
+      </div>
+      <div className="list__wrapper">
+        {tasks
+          .filter((task) => (activeTag === 'all' ? task : task.tag === activeTag))
+          .filter((task) => (showCompleted ? task.completed : task))
+          .map((task, index) => (
+            <TaskComponent
+              key={index}
+              tags={tags}
+              task={task}
+              updateTask={(updatedTask) => updateTask(updatedTask, task.description)}
+              onClick={() => deleteTask(index)}
+            />
+          ))}
       </div>
     </div>
   );
