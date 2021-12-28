@@ -8,7 +8,7 @@
 
 ## Link (Desktop only)
 
-• https://allexz10.github.io/ToDoList--React-New
+- https://allexz10.github.io/ToDoList--React-New
 
 ## Still Outstanding
 
